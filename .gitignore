@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual env
+env/
+venv/
+bot_env/
+
+# IDE
+.vscode/
+.idea/
+
+# System
+.DS_Store
+Thumbs.db
+
+# Cache/data
+data/encoded/
+data/cluster/labels.npy
+data/cluster/cluster_plot.png
+data/cluster/config.json
+data/review/*.png
+data/review/click_logs.json
+screen_now.png
+poke_data.zip

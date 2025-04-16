@@ -1,50 +1,30 @@
 import numpy as np
-from pathlib import Path
-import hdbscan
-import umap
-import matplotlib.pyplot as plt
 import json
+from pathlib import Path
+import sys
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from core.clustering import run_hdbscan, reduce_umap, save_cluster_plot, save_cluster_config
 
-VEC_PATH = Path("../data/encoded/vectors.npy")
-NAME_PATH = Path("../data/encoded/filenames.json")
-LABEL_SAVE = Path("../data/cluster/labels.npy")
-PLOT_SAVE = Path("../data/cluster/cluster_plot.png")
-CONFIG_SAVE = Path("../data/cluster/config.json")
+ENCODED_PATH = Path("../data/encoded")
+CLUSTER_PATH = Path("../data/cluster")
+CLUSTER_PATH.mkdir(parents=True, exist_ok=True)
 
-def zmain():
-    print("🚀 Đang load vectors...")
-    vectors = np.load(VEC_PATH)
-    with open(NAME_PATH) as f:
-        filenames = json.load(f)
+VEC_PATH = ENCODED_PATH / "vectors.npy"
+NAME_PATH = ENCODED_PATH / "filenames.json"
+LABEL_PATH = CLUSTER_PATH / "labels.npy"
+PLOT_PATH = CLUSTER_PATH / "cluster_plot.png"
+CONFIG_PATH = CLUSTER_PATH / "config.json"
 
-    print("🔍 Clustering với HDBSCAN...")
-    clusterer = hdbscan.HDBSCAN(min_cluster_size=5)
-    labels = clusterer.fit_predict(vectors)
+vectors = np.load(VEC_PATH)
+with open(NAME_PATH) as f:
+    filenames = json.load(f)
 
-    n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
-    print(f"✅ Đã phát hiện {n_clusters} cụm (UI states)")
+print("🔍 Clustering với HDBSCAN...")
+labels = run_hdbscan(vectors)
+np.save(LABEL_PATH, labels)
+print("✅ Đã lưu labels")
 
-    # Lưu nhãn
-    LABEL_SAVE.parent.mkdir(parents=True, exist_ok=True)
-    np.save(LABEL_SAVE, labels)
-
-    config = {
-        "method": "hdbscan",
-        "n_clusters": int(n_clusters),
-        "label_set": list(set(labels))
-    }
-    with open(CONFIG_SAVE, "w") as f:
-        json.dump(config, f)
-
-    print("📊 Đang reduce dimension bằng UMAP...")
-    reducer = umap.UMAP(random_state=42)
-    embedding = reducer.fit_transform(vectors)
-
-    plt.figure(figsize=(10, 8))
-    scatter = plt.scatter(embedding[:, 0], embedding[:, 1], c=labels, cmap='tab10', s=8)
-    plt.title("UI Cluster via HDBSCAN + UMAP")
-    plt.savefig(PLOT_SAVE)
-    print(f"🖼️ Plot saved to: {PLOT_SAVE}")
-
-if __name__ == "__main__":
-    main()
+print("📊 Đang UMAP để visualize...")
+embedding = reduce_umap(vectors)
+save_cluster_plot(embedding, labels, PLOT_PATH)
+save_cluster_config(labels, CONFIG_PATH)

@@ -1,64 +1,37 @@
 import os
-import torch
-import torchvision.models as models
-import torchvision.transforms as transforms
-from PIL import Image
-import numpy as np
-from tqdm import tqdm
-from pathlib import Path
 import json
+import numpy as np
+import cv2
+from pathlib import Path
+import sys
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from core.encoder import get_encoder, encode_image
 
-RAW_DIR = Path("../data/raw/")
-SAVE_VEC = Path("../data/encoded/vectors.npy")
-SAVE_LIST = Path("../data/encoded/filenames.json")
+RAW_DIR = Path("../data/review")
+ENCODED_DIR = Path("../data/encoded")
+ENCODED_DIR.mkdir(parents=True, exist_ok=True)
 
+vectors = []
+filenames = []
 
-def load_images(image_dir):
-    image_paths = sorted(image_dir.glob("*.png"))
-    return image_paths
+model = get_encoder()
 
+for img_name in sorted(os.listdir(RAW_DIR)):
+    if not img_name.lower().endswith(".png"):
+        continue
+    img_path = RAW_DIR / img_name
+    img = cv2.imread(str(img_path))
+    if img is None:
+        print(f"⚠️ Không đọc được ảnh: {img_path}")
+        continue
+    vec = encode_image(img, model)
+    vectors.append(vec)
+    filenames.append(img_name)
 
-def get_resnet50_encoder():
-    model = models.resnet50(pretrained=True)
-    model.eval()
-    model = torch.nn.Sequential(*list(model.children())[:-1])  # remove FC
-    return model
+vectors = np.array(vectors)
+np.save(ENCODED_DIR / "vectors.npy", vectors)
 
+with open(ENCODED_DIR / "filenames.json", "w") as f:
+    json.dump(filenames, f)
 
-def encode_images(model, image_paths, device="cpu"):
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                             std=[0.229, 0.224, 0.225])
-    ])
-
-    vectors = []
-    for path in tqdm(image_paths):
-        img = Image.open(path).convert("RGB")
-        x = transform(img).unsqueeze(0).to(device)
-        with torch.no_grad():
-            feat = model(x).squeeze().cpu().numpy()
-        vectors.append(feat)
-
-    return np.stack(vectors), [str(p.name) for p in image_paths]
-
-
-def main():
-    os.makedirs(SAVE_VEC.parent, exist_ok=True)
-    image_paths = load_images(RAW_DIR)
-    model = get_resnet50_encoder()
-
-    print(f"🚀 Đang encode {len(image_paths)} ảnh bằng ResNet50...")
-    vectors, filenames = encode_images(model, image_paths)
-
-    np.save(SAVE_VEC, vectors)
-    with open(SAVE_LIST, "w") as f:
-        json.dump(filenames, f)
-
-    print(f"✅ Đã lưu vector vào: {SAVE_VEC}")
-    print(f"✅ Danh sách file: {SAVE_LIST}")
-
-
-if __name__ == "__main__":
-    main()
+print(f"✅ Đã encode {len(vectors)} ảnh và lưu vào {ENCODED_DIR}")
